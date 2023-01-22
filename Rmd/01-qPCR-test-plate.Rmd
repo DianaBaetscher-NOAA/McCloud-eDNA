@@ -1,0 +1,124 @@
+---
+title: "01-qPCR-test-plate"
+output: html_notebook
+---
+
+21 January 2023
+
+
+Initial test plate with new Chinook CytB gBlocks (IDT) and testing the Moa-IPC (internal positive control) from Ana Ramon-Laca's paper.
+
+The Chinook standards look good and there's some amplification from the eDNA samples that I tested - but it's quite low, so I may want to test dilutions in case of inhibition.
+
+The multiplexed Chinook + IPC amplification wasn't as robust as the Chinook assay alone. This could be because the probe concentration was higher for the Chinook alone, or because there is interaction between the multiple primer sets.
+
+```{r load-libraries}
+library(tidyverse)
+library(readxl)
+```
+
+
+```{r load-data}
+test_data <- read_xlsx("../data/2023-01-21_WinterRunChinook_testplate_export.xlsx", sheet = "Results", skip = 34)
+
+test_data 
+```
+
+
+Take a quick look to see how many of the eDNA samples amplified and what the ~quantity was for those.
+
+```{r check-samples}
+# looking at the chinook probe/primers alone first
+slim_df <- test_data %>%
+  filter(`Target Name` == "Target 1",
+         !str_detect(`Sample Name`, "IPC")) %>% # ignore all of the IPC standards
+  select(`Sample Name`, Task, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`)
+  
+
+```
+
+
+Some quality control
+
+```{r}
+# just the Chinook probe/primers/standards (gBlock)
+
+slim_df %>%
+  filter(Task == "STANDARD", 
+         !is.na(`Ct SD`)) %>% # looks like there's one standard that needs to be renamed appropriately to go with the IPC
+  arrange(desc(Quantity)) %>% 
+  filter(CT < 12 | CT > 13) %>% # and two standard 1's that need to be reassigned to the IPC
+  ggplot(aes(x = `Ct Mean`, y = log10(Quantity))) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Chinook standard curve",
+       x = "Cycle (Ct)",
+       y = "log Quantity (DNA copy number/ul)")
+
+```
+
+
+
+```{r}
+slim_df %>%
+  filter(Task != "STANDARD",
+         CT != "Undetermined") %>%
+  ggplot(aes(x = `Ct Mean`, y = log10(`Quantity Mean`))) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Cycle (Ct) vs. log DNA copy number/ul",
+       x = "Cycle (Ct)",
+       y = "log Quantity (DNA copy number/ul)")
+
+```
+
+It bounces around a little bit, but maybe that's just because we are looking at such a low threshold? 
+
+
+Look at by sample:
+
+```{r}
+slim_df %>%
+  filter(Task != "STANDARD") %>%
+  ggplot(aes(x = `Sample Name`, y = `Quantity Mean`)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "McCloud eDNA qPCR test - DNA copy number/ul per sample",
+       x = "Sample",
+       y = "Mean quantity (DNA copy number/ul)") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+
+ggsave("pdf_outputs/testplate_qPCR_mean_quantity.pdf", width = 6, height = 5)
+```
+
+Same plot, but with the IPC multiplexed:
+
+```{r}
+test_data %>%
+  filter(`Target Name` == "Target 1",
+         str_detect(`Sample Name`, "IPC")) %>% # ignore all of the IPC standards
+  select(`Sample Name`, Task, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`) %>%
+  filter(Task != "STANDARD") %>%
+  ggplot(aes(x = `Sample Name`, y = `Quantity Mean`)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "McCloud eDNA qPCR test - DNA copy number/ul per sample",
+       x = "Sample",
+       y = "Mean quantity (DNA copy number/ul)") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+
+```
+Way more drop-out. This could mean a) the multiplex is interfering or b) the concentration of the Chinook probe needs to be higher than the "probe mix" used in Ramon-Laca et al.
+
+
+I'm still curious about inhibition - even though we're seeing amplification. Seems like a good approach to dilute a handful of samples 1:10 and run them at both the original concentration and the dilute concentration to see if there's a difference.
+
+
