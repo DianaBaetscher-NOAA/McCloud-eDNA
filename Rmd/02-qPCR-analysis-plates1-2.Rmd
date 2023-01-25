@@ -1,0 +1,202 @@
+---
+title: "02-qPCR-data-plates1-2"
+output: html_notebook
+---
+
+24 January 2023
+
+
+After running the rest of the current batch of samples, let's take a look at the qPCR results and temporal trends.
+
+Because many of the samples amplify at a higher number of cycles than my standards, the appropriate thing to do would be to re-run the samples with a new set of standards that overlap more with the cycle numbers for the samples (i.e., drop the highest concentration standards in favor of additional standards on the lower end).
+
+For the meantime, the preliminary data show a clear temporal trend at the ADN site, but lower overall detections (and conc. of detections) at the MCB site. It would be good to know more about those...
+
+
+
+
+```{r load-libraries}
+library(tidyverse)
+library(readxl)
+```
+
+
+```{r load-data}
+test_data <- read_xlsx("../data/2023-01-21_WinterRunChinook_testplate_export.xlsx", sheet = "Results", skip = 34)
+
+# plate 1
+plate1 <- read_xlsx("../data/2023-01-23_winterRunChinook_plate1.xlsx", sheet = "Results", skip = 32)
+
+# plate 2
+plate2 <- read_xlsx("../data/2023-01-23_WinterRunChinook_plate2.xlsx", sheet = "Results", skip = 32)
+```
+
+
+
+Merge that data into a single df.
+
+```{r}
+data.qpcr <- test_data %>%
+  bind_rows(., plate1, plate2) %>% 
+  # remove the IPC test data since we went with just the Chinook probe
+  filter(!str_detect(`Sample Name`, "IPC")) %>%
+  select(`Sample Name`, Task, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`)
+
+
+```
+
+
+```{r}
+data.qpcr %>%
+  filter(Task != "STANDARD",
+         CT != "Undetermined") %>%
+  ggplot(aes(x = `Ct Mean`, y = log10(`Quantity Mean`))) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Cycle (Ct) vs. log DNA copy number/ul",
+       x = "Cycle (Ct)",
+       y = "log Quantity (DNA copy number/ul)")
+
+```
+The relationship drifts at higher cycle numbers - that could be a plate effect?
+
+Samples amplified on multiple plates?
+
+```{r}
+sample.data <- data.qpcr %>%
+   filter(Task != "STANDARD", `Sample Name` != "NTC") %>%
+  group_by(`Sample Name`) %>%
+  add_tally() %>%
+  arrange(`Sample Name`) 
+
+# look at amplification per sample 
+sample.data %>%
+  filter(n > 3) %>%
+   ggplot(aes(x = `Sample Name`, y = Quantity)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "McCloud eDNA qPCR test - DNA copy number/ul per sample",
+       x = "Sample",
+       y = "Mean quantity (DNA copy number/ul)") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+  
+```
+Cycle number for that subset of samples?
+
+```{r}
+sample.data %>%
+  filter(n > 3, 
+         CT != "Undetermined") %>%
+  ggplot(aes(x = CT, y = log10(Quantity))) +
+  geom_point() +
+  geom_text(aes(label = `Sample Name`), check_overlap = T, size = 3) +
+  theme_minimal() +
+  labs(title = "Cycle (Ct) vs. log DNA copy number/ul",
+       x = "Cycle (Ct)",
+       y = "log Quantity (DNA copy number/ul)")
+  
+```
+
+
+
+Quickly look at trends in sample means over the temporal period sampled.
+
+```{r}
+sample.data %>%
+ ggplot(aes(x = `Sample Name`, y = `Quantity Mean`)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "McCloud eDNA qPCR test - DNA copy number/ul per sample",
+       x = "Sample",
+       y = "Mean quantity (DNA copy number/ul)") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+
+
+```
+
+Make two factors for the sites: ADN and MCB
+
+```{r}
+# this plot does not use the mean DNA copy number quantity - so there should be multiple data points per sample replicate
+sample.data %>%
+  mutate(site = ifelse(str_detect(`Sample Name`, "ADN"), "ADN", "MCB")) %>%
+  ggplot(aes(x = `Sample Name`, y = Quantity, color = site)) +
+  geom_point(alpha = 0.7) +
+  theme_bw() +
+  facet_grid(cols = vars(site), scales = "free_x") +
+  labs(title = "McCloud eDNA qPCR: DNA copy number/ul, replicates",
+       x = "Sample",
+       y = "Quantity (DNA copy number/ul)") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+
+ggsave("pdf_outputs/plates1_2_output_by_replicate.pdf", height = 5, width = 8)
+```
+
+Do the quick conversion to get to DNA copies per L (rather than ul).
+
+
+```{r}
+sample.data %>%
+  mutate(mean_quantity_L = `Quantity Mean`*10^6) %>%
+  mutate(site = ifelse(str_detect(`Sample Name`, "ADN"), "ADN", "MCB")) %>%
+  ggplot(aes(x = `Sample Name`, y = mean_quantity_L, color = site)) +
+  geom_point() +
+  theme_bw() +
+  facet_grid(cols = vars(site), scales = "free_x") +
+  labs(title = "McCloud eDNA qPCR test - mean DNA copy number/L",
+       x = "Sample",
+       y = "Mean quantity (DNA copy number/L)") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+
+```
+
+## Add metadata
+
+```{r}
+meta <- read_xlsx("../data/WRCSMcCloud22_eDNAMetadata_CJS_dsb.xlsx", sheet = "meta_simple")
+
+meta 
+```
+
+combine qPCR and metadata
+```{r}
+merged.df <- sample.data %>%
+  left_join(., meta, by = c("Sample Name" = "Sample ID")) %>%
+  mutate(quantity_L = Quantity*10^6) %>%
+  mutate(site = ifelse(str_detect(`Sample Name`, "ADN"), "ADN", "MCB"))
+
+
+# plot with that info
+merged.df %>%
+  ggplot(aes(x = `Date Collected`, y = quantity_L, color = site)) +
+  geom_point(alpha = 0.7) +
+  theme_bw() +
+  facet_grid(cols = vars(site), scales = "free_x") +
+  labs(title = "McCloud eDNA qPCR: DNA copy number/L, by collection date",
+       x = "Collection date, 2022",
+       y = "Quantity (DNA copy number/L)") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  ) 
+  
+ggsave("pdf_outputs/plates1_2_output_by_date.pdf", height = 5, width = 8)
+```
+
