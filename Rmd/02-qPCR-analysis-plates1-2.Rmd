@@ -18,11 +18,11 @@ For example, for the standards, if I know that the lowest standard was 10 copies
 
 Looking at the protocol for calculating per L values here: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6211659/
 
-which takes into account the sample volume (1 L) and the elution volume (100 ul). 
+which takes into account the sample volume (1 L) and the elution volume (120 ul). 
 
-In that case, the number of copies per qPCR reaction (Quantity) is equivalent to 20 mL or 0.02 L of water sample collected in the field.
+In that case, the number of copies per qPCR reaction (Quantity) is equivalent to 0.0167 L of water sample collected in the field.
 
-The adjusted copy number = qPCR Quantity/0.02 L = DNA copies per L.
+The adjusted copy number = qPCR Quantity/0.0167 L = DNA copies per L.
 
 
 ```{r load-libraries}
@@ -51,8 +51,8 @@ data.qpcr <- test_data %>%
   # remove the IPC test data since we went with just the Chinook probe
   filter(!str_detect(`Sample Name`, "IPC")) %>%
   select(`Sample Name`, Task, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`) %>%
-  mutate(copies_per_L = Quantity/0.02) %>%
-  mutate(mean_copies_per_L = `Quantity Mean`/0.02)
+  mutate(copies_per_L = Quantity/0.0167) %>%
+  mutate(mean_copies_per_L = `Quantity Mean`/0.0167)
 
 
 ```
@@ -237,7 +237,7 @@ merged.df %>%
                        guide="colorbar",na.value="lightgray")
   
   
-ggsave("pdf_outputs/qPCR_detections_tile.pdf", width = 7, height = 3)
+ggsave("pdf_outputs/McCloud_Chinook_qPCR_detections_tile.pdf", width = 7, height = 3)
 ```
 
 I think that looks pretty good. 
