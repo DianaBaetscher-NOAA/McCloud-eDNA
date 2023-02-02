@@ -12,7 +12,17 @@ Because many of the samples amplify at a higher number of cycles than my standar
 
 For the meantime, the preliminary data show a clear temporal trend at the ADN site, but lower overall detections (and conc. of detections) at the MCB site. It would be good to know more about those...
 
+Update: for the quantity, rather than reporting it as per ul or per L, I can go ahead and do the calculation for the number of ul added to the PCR (2 ul).
 
+For example, for the standards, if I know that the lowest standard was 10 copies per ul and I added 2 ul, then that would make it 20 copies total in that reaction.
+
+Looking at the protocol for calculating per L values here: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6211659/
+
+which takes into account the sample volume (1 L) and the elution volume (100 ul). 
+
+In that case, the number of copies per qPCR reaction (Quantity) is equivalent to 20 mL or 0.02 L of water sample collected in the field.
+
+The adjusted copy number = qPCR Quantity/0.02 L = DNA copies per L.
 
 
 ```{r load-libraries}
@@ -22,13 +32,13 @@ library(readxl)
 
 
 ```{r load-data}
-test_data <- read_xlsx("../data/2023-01-21_WinterRunChinook_testplate_export.xlsx", sheet = "Results", skip = 34)
+test_data <- read_xlsx("../data/2023-01-21_WinterRunChinook_testplate_standards_2ul.xlsx", sheet = "Results", skip = 34)
 
 # plate 1
-plate1 <- read_xlsx("../data/2023-01-23_winterRunChinook_plate1.xlsx", sheet = "Results", skip = 32)
+plate1 <- read_xlsx("../data/2023-01-23_winterRunChinook_plate1_results_standards_2ul.xlsx", sheet = "Results", skip = 32)
 
 # plate 2
-plate2 <- read_xlsx("../data/2023-01-23_WinterRunChinook_plate2.xlsx", sheet = "Results", skip = 32)
+plate2 <- read_xlsx("../data/2023-01-23_winterRunChinook_plate2_standards_2ul.xlsx", sheet = "Results", skip = 32)
 ```
 
 
@@ -40,7 +50,9 @@ data.qpcr <- test_data %>%
   bind_rows(., plate1, plate2) %>% 
   # remove the IPC test data since we went with just the Chinook probe
   filter(!str_detect(`Sample Name`, "IPC")) %>%
-  select(`Sample Name`, Task, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`)
+  select(`Sample Name`, Task, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`) %>%
+  mutate(copies_per_L = Quantity/0.02) %>%
+  mutate(mean_copies_per_L = `Quantity Mean`/0.02)
 
 
 ```
@@ -53,12 +65,12 @@ data.qpcr %>%
   ggplot(aes(x = `Ct Mean`, y = log10(`Quantity Mean`))) +
   geom_point() +
   theme_minimal() +
-  labs(title = "Cycle (Ct) vs. log DNA copy number/ul",
+  labs(title = "Cycle (Ct) vs. log DNA copy number",
        x = "Cycle (Ct)",
-       y = "log Quantity (DNA copy number/ul)")
+       y = "log Quantity (DNA copy number)")
 
 ```
-The relationship drifts at higher cycle numbers - that could be a plate effect?
+The relationship drifts at higher cycle numbers - or because this is outside the detection threshold at this point.
 
 Samples amplified on multiple plates?
 
@@ -75,9 +87,9 @@ sample.data %>%
    ggplot(aes(x = `Sample Name`, y = Quantity)) +
   geom_point() +
   theme_minimal() +
-  labs(title = "McCloud eDNA qPCR test - DNA copy number/ul per sample",
+  labs(title = "McCloud eDNA qPCR test - DNA copy number per sample",
        x = "Sample",
-       y = "Mean quantity (DNA copy number/ul)") +
+       y = "Mean quantity (DNA copy number)") +
   theme(
     axis.text.x = element_text(angle = 90, hjust = 0.95),
     axis.title.x = element_text(margin = margin(t = 10)),
@@ -95,9 +107,9 @@ sample.data %>%
   geom_point() +
   geom_text(aes(label = `Sample Name`), check_overlap = T, size = 3) +
   theme_minimal() +
-  labs(title = "Cycle (Ct) vs. log DNA copy number/ul",
+  labs(title = "Cycle (Ct) vs. log DNA copy number",
        x = "Cycle (Ct)",
-       y = "log Quantity (DNA copy number/ul)")
+       y = "log Quantity (DNA copy number)")
   
 ```
 
@@ -107,12 +119,12 @@ Quickly look at trends in sample means over the temporal period sampled.
 
 ```{r}
 sample.data %>%
- ggplot(aes(x = `Sample Name`, y = `Quantity Mean`)) +
+ ggplot(aes(x = `Sample Name`, y = mean_copies_per_L)) +
   geom_point() +
   theme_minimal() +
-  labs(title = "McCloud eDNA qPCR test - DNA copy number/ul per sample",
+  labs(title = "McCloud eDNA qPCR test - DNA copies per L",
        x = "Sample",
-       y = "Mean quantity (DNA copy number/ul)") +
+       y = "Mean DNA copies per L") +
   theme(
     axis.text.x = element_text(angle = 90, hjust = 0.95),
     axis.title.x = element_text(margin = margin(t = 10)),
@@ -128,36 +140,33 @@ Make two factors for the sites: ADN and MCB
 # this plot does not use the mean DNA copy number quantity - so there should be multiple data points per sample replicate
 sample.data %>%
   mutate(site = ifelse(str_detect(`Sample Name`, "ADN"), "ADN", "MCB")) %>%
-  ggplot(aes(x = `Sample Name`, y = Quantity, color = site)) +
+  ggplot(aes(x = `Sample Name`, y = copies_per_L, color = site)) +
   geom_point(alpha = 0.7) +
   theme_bw() +
   facet_grid(cols = vars(site), scales = "free_x") +
-  labs(title = "McCloud eDNA qPCR: DNA copy number/ul, replicates",
+  labs(title = "McCloud eDNA qPCR: DNA copies/L, replicates",
        x = "Sample",
-       y = "Quantity (DNA copy number/ul)") +
+       y = "DNA copies/L") +
   theme(
     axis.text.x = element_text(angle = 90, hjust = 0.95),
     axis.title.x = element_text(margin = margin(t = 10)),
     axis.title.y = element_text(margin = margin(r = 10)),
   )
 
-ggsave("pdf_outputs/plates1_2_output_by_replicate.pdf", height = 5, width = 8)
+ggsave("pdf_outputs/plates1_2_copies_L_by_replicate.pdf", height = 5, width = 8)
 ```
-
-Do the quick conversion to get to DNA copies per L (rather than ul).
 
 
 ```{r}
 sample.data %>%
-  mutate(mean_quantity_L = `Quantity Mean`*10^6) %>%
   mutate(site = ifelse(str_detect(`Sample Name`, "ADN"), "ADN", "MCB")) %>%
-  ggplot(aes(x = `Sample Name`, y = mean_quantity_L, color = site)) +
+  ggplot(aes(x = `Sample Name`, y = mean_copies_per_L, color = site)) +
   geom_point() +
   theme_bw() +
   facet_grid(cols = vars(site), scales = "free_x") +
-  labs(title = "McCloud eDNA qPCR test - mean DNA copy number/L",
+  labs(title = "McCloud eDNA qPCR - mean DNA copy number/L",
        x = "Sample",
-       y = "Mean quantity (DNA copy number/L)") +
+       y = "Mean DNA copies/L") +
   theme(
     axis.text.x = element_text(angle = 90, hjust = 0.95),
     axis.title.x = element_text(margin = margin(t = 10)),
@@ -178,25 +187,61 @@ combine qPCR and metadata
 ```{r}
 merged.df <- sample.data %>%
   left_join(., meta, by = c("Sample Name" = "Sample ID")) %>%
-  mutate(quantity_L = Quantity*10^6) %>%
   mutate(site = ifelse(str_detect(`Sample Name`, "ADN"), "ADN", "MCB"))
 
 
 # plot with that info
 merged.df %>%
-  ggplot(aes(x = `Date Collected`, y = quantity_L, color = site)) +
+  ggplot(aes(x = `Date Collected`, y = copies_per_L, color = site)) +
   geom_point(alpha = 0.7) +
   theme_bw() +
   facet_grid(cols = vars(site), scales = "free_x") +
-  labs(title = "McCloud eDNA qPCR: DNA copy number/L, by collection date",
+  labs(title = "McCloud eDNA qPCR: DNA copies/L, by collection date",
        x = "Collection date, 2022",
-       y = "Quantity (DNA copy number/L)") +
+       y = "DNA copies/L") +
   theme(
     axis.text.x = element_text(angle = 90, hjust = 0.95),
     axis.title.x = element_text(margin = margin(t = 10)),
     axis.title.y = element_text(margin = margin(r = 10)),
   ) 
   
-ggsave("pdf_outputs/plates1_2_output_by_date.pdf", height = 5, width = 8)
+ggsave("pdf_outputs/plates1_2_copies_L_by_date.pdf", height = 5, width = 8)
 ```
+
+### Displaying replicates with zeros
+
+
+Rachel was interested in seeing how many replicates for a given sample detected Chinook vs. those that didn't.
+
+It seems like a heatmap might be a good way to capture this info.
+
+```{r}
+merged.df %>%
+  separate(`Sample Name`, into = c("collection_date", "site", "field_replicate"), remove = F) %>%
+  group_by(`Sample Name`) %>%
+  mutate(pcr_replicate = row_number()) %>%
+  # imagine faceting by site
+  ggplot(aes(x = pcr_replicate, y = field_replicate, fill = copies_per_L)) +
+    geom_tile(aes(width=0.5, height=0.5)) +
+  theme_bw() +
+  facet_grid(rows = vars(site), cols = vars(collection_date), scales = "free") +
+  labs(title = "McCloud Chinook eDNA, qPCR detections",
+       x = "qPCR replicate",
+       y = "Field replicate (water sample)") +
+  theme(
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10))
+  ) +
+  scale_x_continuous(breaks = c(1,2,3), limits = c(0,4)) +
+  scale_fill_continuous(low="bisque", high="lightsalmon3", 
+                       guide="colorbar",na.value="lightgray")
+  
+  
+ggsave("pdf_outputs/qPCR_detections_tile.pdf", width = 7, height = 3)
+```
+
+I think that looks pretty good. 
+
+
+
 
