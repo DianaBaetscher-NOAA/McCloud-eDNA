@@ -1,0 +1,78 @@
+---
+title: "2023-test-samples"
+output: github_document
+date: "2023-11-01"
+---
+
+October 2023
+
+Four extracts sent from Amelie at UC Davis to see if 1) they are inhibited and 2) we detect Chinook.
+
+```{r load-libraries}
+library(tidyverse)
+library(readxl)
+```
+
+
+Quick look at chinook:
+
+```{r}
+mccloud <- read_xlsx("../data/2023-10-20_McCloudChinook_reDo.xlsx", sheet = "Results", skip = 34)
+
+ch_p <- mccloud %>%
+  #filter(`Target Name` == "Moa_IPC") %>%
+  ggplot(aes(x =`Sample Name` , y = `Ct Mean` , color = `Target Name`)) +
+  geom_point() +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90)
+  ) +
+  #facet_grid(rows = vars(`Target Name`))  +
+  scale_y_continuous(breaks = seq(18,40, 1)) 
+
+ch_p + annotate("rect", xmin = "1", xmax = "Sample D", ymin = 25.7, ymax = 27.7, alpha = 0.2, fill = "salmon")
+
+
+```
+```{r}
+mccloud %>%
+  filter(Task == "STANDARD" &
+           `Target Name` == "Moa_IPC" &
+           `Sample Name` == "1000")
+
+
+```
+
+
+
+```{r}
+mccloud %>%
+  filter(Task == "STANDARD") %>%
+  arrange(Well) %>%
+   ggplot(aes(x = reorder(`Sample Name`, Well), y = `Ct Mean` , color = `Target Name`)) +
+  geom_point() +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90)
+  ) +
+  #facet_grid(rows = vars(`Target Name`))  +
+  scale_y_continuous(breaks = seq(18,40, 1)) 
+
+```
+
+Less consistent quantification at 1 copy. That's totally reasonable.
+
+Assay efficiency?
+
+```{r}
+mccloud %>%
+  mutate(efficiency = -1 + 10^ (-1/Slope)) %>%
+  group_by(`Target Name`) %>%
+  summarise(E = mean(efficiency))
+
+```
+Those are pretty fantastic values.
+
+
+
+
