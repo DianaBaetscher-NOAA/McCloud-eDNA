@@ -1,0 +1,265 @@
+---
+title: "CABA-extraction-tests"
+author: "diana baetscher"
+date: "2024-08-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Testing different extraction methods between UC Davis and NOAA ABL. Details for each sample/extraction are in the chain-of-custody document:
+/data/20240708_Segarra_To_Baetscher.pdf
+
+
+```{r load-libraries}
+library(tidyverse)
+library(readxl)
+```
+
+Quick look at chinook:
+
+```{r look-at-raw-data}
+mccloud <- read_xlsx("../data/2024-08-08_CABA_winterRunChinook_result_standards_corrected.xlsx", sheet = "Results", skip = 34)
+
+# check standards
+mccloud %>%
+  filter(Task == "STANDARD") %>%
+  ggplot(aes(x = `Sample Name`, y = CT, color = `Target Name`)) +
+  geom_point() +
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 90)
+  )
+
+
+ch_p <- mccloud %>%
+  #filter(`Target Name` == "Moa_IPC") %>%
+  ggplot(aes(x =`Sample Name` , y = `Ct Mean` , color = `Target Name`)) +
+  geom_point() +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90)
+  ) +
+  #facet_grid(rows = vars(`Target Name`))  +
+  scale_y_continuous(breaks = seq(18,40, 1)) 
+# 
+# ch_p + annotate("rect", xmin = "1", xmax = "Sample D", ymin = 25.7, ymax = 27.7, alpha = 0.2, fill = "salmon")
+
+
+```
+The specs on this run are really good. Efficiency is at 100% and R^2 for standards is >0.98
+
+```{r}
+mccloud %>%
+  filter(Task == "UNKNOWN" &
+           `Target Name` == "Ots_cytB") %>%
+  ggplot(aes(x = `Sample Name`, y = `Ct Mean`, color = `Target Name`)) +
+  geom_point() +
+  theme_bw() +
+   theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.9, vjust = 0.5)
+  )
+
+```
+
+Just CABA samples
+```{r explore-caba-samples-more}
+# remove undetermined samples - none of these are CABA samples
+# and convert CT to a numeric
+test_df <- mccloud %>%
+  filter(CT != "Undetermined")
+
+test_df$CT <- as.numeric(test_df$CT)
+
+test_df %>%
+  filter(Task == "UNKNOWN" &
+           `Target Name` == "Ots_cytB" &
+           str_detect(`Sample Name`, "CABA")) %>%
+  select(`Sample Name`, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`) %>%
+  unique() %>%
+  ggplot(aes(x = CT, y = Quantity, color = `Sample Name`)) +
+  geom_point() +
+  theme_bw()
+  
+```
+Okay, there you can see the differences across replicates. I'll switch to using Quantity rather than CT to make it easier for other folks to interpret.
+
+```{r plot-CABA-quantities}
+test_df %>%
+  filter(Task == "UNKNOWN" &
+           `Target Name` == "Ots_cytB" &
+           str_detect(`Sample Name`, "CABA")) %>%
+  select(`Sample Name`, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`) %>%
+  unique() %>%
+  mutate(preservation = ifelse(`Sample Name` %in% c("CABA1", "CABA2", "CABA3"), "RNAlater", "no_RNAlater")) %>%
+  mutate(extraction = ifelse(`Sample Name` %in% c("CABA1", "CABA4"), "UCD_protocol", "NOAA_protocol")) %>%
+  mutate(lab = ifelse(`Sample Name` %in% c("CABA3", "CABA6"), "NOAA", "UCD")) %>%
+  ggplot(aes(x = `Sample Name`, y = Quantity, color = lab)) +
+  geom_point() +
+  facet_grid(cols = vars(preservation), rows = vars(extraction), scales = "free_x") +
+  theme_bw() +
+    labs(y = "DNA copies") +
+  theme(axis.title.y = element_text(margin = margin(r = 10)))
+
+
+```
+
+```{r alt-plot}
+# might be helpful to compare directly on one axis
+test_df %>%
+  filter(Task == "UNKNOWN" &
+           `Target Name` == "Ots_cytB" &
+           str_detect(`Sample Name`, "CABA")) %>%
+  select(`Sample Name`, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`) %>%
+  unique() %>%
+  mutate(preservation = ifelse(`Sample Name` %in% c("CABA1", "CABA2", "CABA3"), "RNAlater", "no_RNAlater")) %>%
+  mutate(extraction = ifelse(`Sample Name` %in% c("CABA1", "CABA4"), "UCD_protocol", "NOAA_protocol")) %>%
+  mutate(lab = ifelse(`Sample Name` %in% c("CABA3", "CABA6"), "NOAA", "UCD")) %>%
+  ggplot(aes(x = reorder(`Sample Name`, `Quantity Mean`), y = Quantity, shape = lab, color = preservation)) +
+  geom_point() +
+  facet_grid(cols = vars(extraction), scales = "free_x") +
+  theme_bw() +
+    labs(y = "DNA copies",
+         x = "Sample") +
+  theme(axis.title.y = element_text(margin = margin(r = 10)))
+
+```
+
+```{r}
+test_df %>%
+  filter(Task == "UNKNOWN" &
+           `Target Name` == "Ots_cytB" &
+           str_detect(`Sample Name`, "CABA")) %>%
+  select(`Sample Name`, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`) %>%
+  unique() %>%
+  mutate(preservation = ifelse(`Sample Name` %in% c("CABA1", "CABA2", "CABA3"), "RNAlater", "no_RNAlater")) %>%
+  mutate(extraction = ifelse(`Sample Name` %in% c("CABA1", "CABA4"), "UCD_protocol", "NOAA_protocol")) %>%
+  mutate(lab = ifelse(`Sample Name` %in% c("CABA3", "CABA6"), "NOAA", "UCD"))
+```
+
+
+## Compare Camilo's filter extraction results with UCD protocol in Amelie's lab
+
+
+Amelie extracted the remaining half-filter from Camilo's original samples that I ran in January 2023.
+
+The original analysis is in the Rmd `02-qPCR-analysis-plates1-2.Rmd`.
+
+
+
+Taking a look at the new extractions and qPCR results:
+```{r ah-di-nah-samples}
+adn_test_samples <- test_df %>%
+  filter(Task == "UNKNOWN" &
+           `Target Name` == "Ots_cytB" &
+           str_detect(`Sample Name`, "ADN")) %>%
+  select(`Sample Name`, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`) %>%
+  unique() 
+
+adn_test_samples %>%
+  ggplot(aes(x = reorder(`Sample Name`, `Quantity Mean`), y = Quantity)) +
+  geom_point() +
+  #facet_grid(cols = vars(extraction), scales = "free_x") +
+  theme_bw() +
+    labs(y = "DNA copies",
+         x = "Sample") +
+  theme(axis.title.y = element_text(margin = margin(r = 10)))
+
+```
+
+Samples:
+ADN 2CD 220906: 
+Camilo’s leftover filters. Stored in -20 since collection, no RNA later used.
+220906 ADN 2C and 220906 ADN 2D were digested separately, then combined during
+DNA extraction per Camilo’s protocol
+Protocol used: “021_eDNAFiltrationProtocol_0.22um_CJS”, which is Camilo’s protocol
+used in previous years.
+
+ADN 2CD 220928:
+Camilo’s leftover filters. Stored in -20 since collection, no RNA later used
+220928 ADN 2C and 220928 ADN 2D were digested separately, then combined during
+DNA extraction per Camilo’s protocol
+Protocol used: “021_eDNAFiltrationProtocol_0.22um_CJS”, which is Camilo’s protocol
+used in previous years.
+
+ADN 1CD 221011:
+Camilo’s leftover filters. Stored in -20 since collection, no RNA later used
+221011 ADN 1C and 221011 ADN 1D were digested separately, then combined during
+DNA extraction per Camilo’s protocol
+Protocol used: “021_eDNAFiltrationProtocol_0.22um_CJS”, which is Camilo’s protocol
+used in previous years.
+
+
+All of these samples are much lower copy number than the CABA samples -which makes sense given they're from the field.
+
+Without correcting for volume, what were the DNA copy numbers for the original extractions from Camilo?
+
+```{r load-data}
+test_data <- read_xlsx("../data/2023-01-21_WinterRunChinook_testplate_standards_2ul.xlsx", sheet = "Results", skip = 34)
+
+# plate 1
+plate1 <- read_xlsx("../data/2023-01-23_winterRunChinook_plate1_results_standards_2ul.xlsx", sheet = "Results", skip = 32)
+
+# plate 2
+plate2 <- read_xlsx("../data/2023-01-23_winterRunChinook_plate2_standards_2ul.xlsx", sheet = "Results", skip = 32)
+
+data.qpcr <- test_data %>%
+  bind_rows(., plate1, plate2) %>% 
+  # remove the IPC test data since we went with just the Chinook probe
+  filter(!str_detect(`Sample Name`, "IPC")) %>%
+  select(`Sample Name`, Task, CT, `Ct Mean`, `Ct SD`, Quantity, `Quantity Mean`, `Quantity SD`)
+
+camilo_samples <- data.qpcr %>%
+  filter(str_detect(`Sample Name`, "ADN")) %>%
+  separate(`Sample Name`, into = c("date", "loc", "rep")) %>%
+  filter(date %in% c("220906", "220928", "221011"))
+
+camilo_samples %>%
+  ggplot(aes(x = date, y = Quantity)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "McCloud eDNA qPCR DNA copies - Camilo's samples",
+       x = "Sample",
+       y = "Mean quantity (DNA copy number)") +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+
+```
+
+
+```{r compare-sets-of-samples}
+# compare CT values, just to make sure the standards aren't affecting things
+tmp1 <- camilo_samples %>%
+  select(date, CT) %>%
+  mutate(extraction = "Camilo")
+
+tmp1$CT <- as.numeric(tmp1$CT)
+
+adn_test_samples %>%
+  separate(`Sample Name`, into = c("sample", "date"), sep = "_") %>%
+  mutate(date = ifelse(is.na(date), "221011", date)) %>%
+  mutate(date = ifelse(date == "9-28", "220928", date)) %>%
+  mutate(date = ifelse(date == "9-6", "220906", date)) %>%
+  select(date, CT) %>%
+  mutate(extraction = "UCD - Segarra") %>%
+  bind_rows(tmp1) %>%
+  ggplot(aes(x = date, y = CT, color = extraction, shape = extraction)) +
+  geom_point(alpha = 0.8, size = 2) +
+  theme_bw() +
+  labs(title = "McCloud eDNA Chinook qPCR",
+       x = "Sample date",
+       y = "qPCR cycling threshold") +
+  theme(
+    #axis.text.x = element_text(angle = 90, hjust = 0.95),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+  )
+  
+ggsave("pdf_outputs/camilo_filter_extraction_comparison_w_segarra_lab.jpg", width = 5, height = 3)
+```
+

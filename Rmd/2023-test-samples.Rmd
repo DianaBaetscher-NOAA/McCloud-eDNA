@@ -16,7 +16,7 @@ library(readxl)
 
 Quick look at chinook:
 
-```{r}
+```{r look-at-raw-data}
 mccloud <- read_xlsx("../data/2023-10-20_McCloudChinook_reDo.xlsx", sheet = "Results", skip = 34)
 
 ch_p <- mccloud %>%

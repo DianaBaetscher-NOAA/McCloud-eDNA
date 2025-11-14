@@ -1,0 +1,93 @@
+---
+title: "priority-samples-sept-2025"
+author: "diana baetscher"
+date: "2025-09-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Organizing metadata and samples for qPCR for Chinook salmon in McCloud River samples
+
+```{r load-library}
+library(tidyverse)
+library(readxl)
+
+
+```
+
+
+```{r read-in-data}
+# cross-reference priority samples with samples we received from Andrea at UC Davis
+priority <- read_xlsx("../data/McCloud_qPCR_Sept2025/McCloud_eDNA_Priority_Samples_FINAL_2025-09-11.xlsx")
+
+# chain of custody sample lists
+# as usual, the formats of these are different, so first I need to reorganize the columns to extract the relevant info
+# or maybe I can extract it from the Extraction database?
+batch1 <- read_xlsx("../data/McCloud_qPCR_Sept2025/20250325.Segarra_to_BaescherCOC.xlsx") %>%
+  mutate(sample = ifelse(!is.na(`Correct Sample Name`), `Correct Sample Name`, `Tube Label`)) %>% 
+  rename(Tube_Label = `Tube Label`) # this batch includes three samples with mislabeled tubes. Fix those
+  
+# the format of the blanks is all over the place.
+# remove those from the rest of the samples to deal coherently
+batch1_noBlanks <- batch1 %>%
+  filter(!str_detect(sample, "Blank")) %>%
+  separate(
+    col = sample,
+    into = c("Date", "Site Code"),
+    sep = "_(?=[[:alpha:]])", # This regex looks for an underscore followed by a character
+    extra = "merge", # Keep anything after the first match in 'suffix'
+    remove = FALSE # Keep the original 'id' column
+  )
+
+batch2 <- read_xlsx("../data/McCloud_qPCR_Sept2025/20250603.Segarra_to_BaescherCOC.xlsx") %>%
+  mutate(sample = Tube_Label) 
+
+batch2_noBlanks <- batch2 %>%
+  filter(!str_detect(sample, "Blank"))
+  
+
+# bind those sample lists together
+samples_received <- bind_rows(batch1_noBlanks, batch2_noBlanks) %>%
+  select(-Tube_Label, -`Correct Sample Name`) # remove this column because it's not accurate for the mislabeled samples
+```
+
+
+```{r check-priority-samples-against-sample-lists}
+# I should be able to join on date and site
+# but the format is slightly different and will need to be modified further
+priority
+
+```
+330 priority samples
+
+
+How many of the priority samples have been received?
+How many are we still waiting on?
+
+1. Need to change the date format to match up (underscores v. hyphens)
+2. Need to change the site code format from uppercase to lowercase
+
+```{r}
+# change formats
+samples_received %>%
+  select(sample, Date, `Site Code`) %>%
+  mutate(col_date = str_replace_all(Date, "_", "-")) %>%
+  select(`Site Code`) %>%
+  unique()
+ # write_csv("csv_outputs/NOAA_samples_received_20250922.csv")
+```
+
+
+```{r}
+priority %>%
+  select(col_date, site_code, replicate) %>%
+  select(site_code) %>%
+  unique()
+
+```
+
+
